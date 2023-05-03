@@ -68,6 +68,9 @@ Max72xxPanel::Max72xxPanel(byte csPin, byte hDisplays, byte vDisplays) : Adafrui
   // We don't want the multiplexer to decode segments for us
   spiTransfer(OP_DECODEMODE, 0);
 
+  // Clear the display
+  write();
+  
   // Enable display
   shutdown(false);
 
@@ -88,7 +91,14 @@ void Max72xxPanel::setRotation(uint8_t rotation) {
 }
 
 void Max72xxPanel::shutdown(boolean b) {
-  spiTransfer(OP_SHUTDOWN, b ? 0 : 1);
+  if (b) {
+    spiTransfer(OP_SHUTDOWN, 0);
+  } else {
+    spiTransfer(OP_DISPLAYTEST, 0); // Make sure we are not in test mode
+    spiTransfer(OP_SCANLIMIT, 7);   // Scan all segments
+    spiTransfer(OP_DECODEMODE, 0);  // No auto-decoding
+    spiTransfer(OP_SHUTDOWN, 1);    // Wake up the display
+  }
 }
 
 void Max72xxPanel::setIntensity(byte intensity) {
@@ -100,60 +110,10 @@ void Max72xxPanel::fillScreen(uint16_t color) {
 }
 
 void Max72xxPanel::drawPixel(int16_t xx, int16_t yy, uint16_t color) {
-	// Operating in bytes is faster and takes less code to run. We don't
-	// need values above 200, so switch from 16 bit ints to 8 bit unsigned
-	// ints (bytes).
-	// Keep xx as int16_t so fix 16 panel limit
-	int16_t x = xx;
-	byte y = yy;
-	byte tmp;
-
-	if ( rotation ) {
-		// Implement Adafruit's rotation.
-		if ( rotation >= 2 ) {										// rotation == 2 || rotation == 3
-			x = _width - 1 - x;
-		}
-
-		if ( rotation == 1 || rotation == 2 ) {		// rotation == 1 || rotation == 2
-			y = _height - 1 - y;
-		}
-
-		if ( rotation & 1 ) {     								// rotation == 1 || rotation == 3
-			tmp = x; x = y; y = tmp;
-		}
-	}
-
-	if ( x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT ) {
-		// Ignore pixels outside the canvas.
-		return;
-	}
-
-	// Translate the x, y coordinate according to the layout of the
-	// displays. They can be ordered and rotated (0, 90, 180, 270).
-
-	byte display = matrixPosition[(x >> 3) + hDisplays * (y >> 3)];
-	x &= 0b111;
-	y &= 0b111;
-
-	byte r = matrixRotation[display];
-	if ( r >= 2 ) {										   // 180 or 270 degrees
-		x = 7 - x;
-	}
-	if ( r == 1 || r == 2 ) {				     // 90 or 180 degrees
-		y = 7 - y;
-	}
-	if ( r & 1 ) {     								   // 90 or 270 degrees
-		tmp = x; x = y; y = tmp;
-	}
-
-	byte d = display / hDisplays;
-	x += (display - d * hDisplays) << 3; // x += (display % hDisplays) * 8
-	y += d << 3;												 // y += (display / hDisplays) * 8
-
-	// Update the color bit in our bitmap buffer.
-
-	byte *ptr = bitmap + x + WIDTH * (y >> 3);
-	byte val = 1 << (y & 0b111);
+  byte offestInByte;
+  byte *ptr = byteForPixel(xx, yy, offestInByte);
+  if (!ptr) return;
+  byte val = 1 << (offestInByte & 0b111);
 
 	if ( color ) {
 		*ptr |= val;
@@ -192,4 +152,69 @@ void Max72xxPanel::spiTransfer(byte opcode, byte data) {
 
 	// Latch the data onto the display(s)
 	digitalWrite(SPI_CS, HIGH);
+}
+
+uint16_t Max72xxPanel::readPixel(int16_t xx, int16_t yy) {
+  byte offestInByte;
+  byte *ptr = byteForPixel(xx, yy, offestInByte);
+  if (!ptr) return 0;
+  byte mask = 1 << (offestInByte & 0b111);
+
+  uint16_t color = (*ptr & mask) != 0;
+  return color;
+}
+
+byte* Max72xxPanel::byteForPixel(int16_t xx, int16_t yy, byte& y) {
+  // Operating in bytes is faster and takes less code to run. We don't
+  // need values above 200, so switch from 16 bit ints to 8 bit unsigned
+  // ints (bytes).
+  // Keep xx as int16_t so fix 16 panel limit
+  byte tmp;
+  int16_t x = xx;
+  y = yy;
+
+  if ( rotation ) {
+    // Implement Adafruit's rotation.
+    if ( rotation >= 2 ) {                    // rotation == 2 || rotation == 3
+      x = _width - 1 - x;
+    }
+
+    if ( rotation == 1 || rotation == 2 ) {   // rotation == 1 || rotation == 2
+      y = _height - 1 - y;
+    }
+
+    if ( rotation & 1 ) {                     // rotation == 1 || rotation == 3
+      tmp = x; x = y; y = tmp;
+    }
+  }
+
+  if ( x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT ) {
+    // Ignore pixels outside the canvas.
+    return nullptr;
+  }
+
+  // Translate the x, y coordinate according to the layout of the
+  // displays. They can be ordered and rotated (0, 90, 180, 270).
+
+  byte display = matrixPosition[(x >> 3) + hDisplays * (y >> 3)];
+  x &= 0b111;
+  y &= 0b111;
+
+  byte r = matrixRotation[display];
+  if ( r >= 2 ) {                      // 180 or 270 degrees
+    x = 7 - x;
+  }
+  if ( r == 1 || r == 2 ) {            // 90 or 180 degrees
+    y = 7 - y;
+  }
+  if ( r & 1 ) {                       // 90 or 270 degrees
+    tmp = x; x = y; y = tmp;
+  }
+
+  byte d = display / hDisplays;
+  x += (display - d * hDisplays) << 3; // x += (display % hDisplays) * 8
+  y += d << 3;                         // y += (display / hDisplays) * 8
+
+  byte *ptr = bitmap + x + WIDTH * (y >> 3);
+  return ptr;
 }

@@ -99,11 +99,25 @@ public:
    */
   void write();
 
+  /*
+   * Read the pixel value at the specified location from the buffer
+   */
+  uint16_t readPixel(int16_t xx, int16_t yy);
+
+
 private:
   byte SPI_CS; /* SPI chip selection */
 
   /* Send out a single command to the device */
   void spiTransfer(byte opcode, byte data=0);
+
+  /*
+   * Return a pointer to the byte in the buffer that contains the
+   * specified pixel. The last parameter, y, is an 'out' parameter.
+   * The lower three bits of y indicate the bit position within the
+   * specified byte of the requested pixel.
+   */
+  inline byte* byteForPixel(int16_t xx, int16_t yy, byte& y);
 
   /* We keep track of the led-status for 8 devices in this array */
   byte *bitmap;
