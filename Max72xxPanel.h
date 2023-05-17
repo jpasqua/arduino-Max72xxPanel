@@ -105,6 +105,11 @@ public:
   uint16_t readPixel(int16_t xx, int16_t yy);
 
 
+  /*
+   * Reset the display to it's initial state
+   */
+  void reset();
+  
 private:
   byte SPI_CS; /* SPI chip selection */
 
