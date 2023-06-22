@@ -51,6 +51,8 @@ Max72xxPanel::Max72xxPanel(byte csPin, byte hDisplays, byte vDisplays) : Adafrui
   	matrixRotation[display] = 0;
   }
 
+  resetClip();
+
   SPI.begin();
 //SPI.setBitOrder(MSBFIRST);
 //SPI.setDataMode(SPI_MODE0);
@@ -76,6 +78,21 @@ Max72xxPanel::Max72xxPanel(byte csPin, byte hDisplays, byte vDisplays) : Adafrui
 
   // Set the brightness to a medium value
   setIntensity(7);
+}
+
+void Max72xxPanel::resetClip() {
+  clipRegion.xMin = -1;
+}
+
+void Max72xxPanel::clip(uint16_t xMin, uint16_t yMin, uint16_t xMax, uint16_t yMax) {
+  if (xMin >= xMax || yMin >= yMax || xMin >= _width || yMin >= _height) {
+    resetClip();
+    return;
+  }
+  clipRegion.xMin = xMin;
+  clipRegion.yMin = yMin;
+  clipRegion.xMax = xMax;
+  clipRegion.yMax = yMax;
 }
 
 void Max72xxPanel::reset() {
@@ -133,6 +150,10 @@ void Max72xxPanel::fillScreen(uint16_t color) {
 }
 
 void Max72xxPanel::drawPixel(int16_t xx, int16_t yy, uint16_t color) {
+  xx += _tx; yy += _ty;
+  if (clipRegion.xMin >= 0 &&
+      (xx < clipRegion.xMin || xx > clipRegion.xMax ||
+       yy < clipRegion.yMin || yy > clipRegion.yMax)) return;
   byte offestInByte;
   byte *ptr = byteForPixel(xx, yy, offestInByte);
   if (!ptr) return;

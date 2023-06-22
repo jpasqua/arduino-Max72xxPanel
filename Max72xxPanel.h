@@ -99,17 +99,33 @@ public:
    */
   void write();
 
+  //
+  // ===== Functions added to the standard Max72xxPanel library
+  //
+
   /*
    * Read the pixel value at the specified location from the buffer
    */
   uint16_t readPixel(int16_t xx, int16_t yy);
-
 
   /*
    * Reset the display to it's initial state
    */
   void reset();
   
+  /*
+   * Clip all drawing to the specified region
+   */
+  void clip(uint16_t xMin, uint16_t yMin, uint16_t xMax, uint16_t yMax);
+
+  /*
+   * Don't do any clipping
+   */
+  void resetClip();
+
+  void translate(int16_t tx, uint16_t ty) { _tx = tx; _ty = ty; }
+  void resetTranslation() { _tx = 0; _ty = 0; }
+
 private:
   byte SPI_CS; /* SPI chip selection */
 
@@ -117,12 +133,17 @@ private:
   void spiTransfer(byte opcode, byte data=0);
 
   /*
-   * Return a pointer to the byte in the buffer that contains the
+   * ADDED: Return a pointer to the byte in the buffer that contains the
    * specified pixel. The last parameter, y, is an 'out' parameter.
    * The lower three bits of y indicate the bit position within the
    * specified byte of the requested pixel.
    */
   inline byte* byteForPixel(int16_t xx, int16_t yy, byte& y);
+
+  struct {
+    int16_t xMin, yMin;
+    int16_t xMax, yMax;
+  } clipRegion;
 
   /* We keep track of the led-status for 8 devices in this array */
   byte *bitmap;
@@ -131,6 +152,9 @@ private:
   byte hDisplays;
   byte *matrixPosition;
   byte *matrixRotation;
+
+  int16_t _tx = 0;
+  int16_t _ty = 0;
 };
 
 #endif	// Max72xxPanel_h
