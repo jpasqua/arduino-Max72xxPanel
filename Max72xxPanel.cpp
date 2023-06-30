@@ -51,48 +51,41 @@ Max72xxPanel::Max72xxPanel(byte csPin, byte hDisplays, byte vDisplays) : Adafrui
   	matrixRotation[display] = 0;
   }
 
-  resetClip();
+  focusOnLine(NoFocus);  // Don't focus on any particular line, use the whole display
+
+  optimizeHint = false;
+  lineSizeInBytes = hDisplays << 3;
 
   SPI.begin();
 //SPI.setBitOrder(MSBFIRST);
 //SPI.setDataMode(SPI_MODE0);
   pinMode(SPI_CS, OUTPUT);
 
-  // Clear the screen
-  fillScreen(0);
-
-  // Make sure we are not in test mode
-  spiTransfer(OP_DISPLAYTEST, 0);
-
-  // We need the multiplexer to scan all segments
-  spiTransfer(OP_SCANLIMIT, 7);
-
-  // We don't want the multiplexer to decode segments for us
-  spiTransfer(OP_DECODEMODE, 0);
-
-  // Clear the display
-  write();
-  
-  // Enable display
-  shutdown(false);
-
-  // Set the brightness to a medium value
-  setIntensity(7);
+  reset();
 }
 
-void Max72xxPanel::resetClip() {
-  clipRegion.xMin = -1;
-}
 
-void Max72xxPanel::clip(uint16_t xMin, uint16_t yMin, uint16_t xMax, uint16_t yMax) {
-  if (xMin >= xMax || yMin >= yMax || xMin >= _width || yMin >= _height) {
-    resetClip();
+void Max72xxPanel::focusOnLine(int line) {
+  if (line == focusedLine) return;
+  if ( (focusedLine = line) == -1) {
+    focusedLinePtr = nullptr;
+    _ty = 0;
     return;
   }
-  clipRegion.xMin = xMin;
-  clipRegion.yMin = yMin;
-  clipRegion.xMax = xMax;
-  clipRegion.yMax = yMax;
+
+  byte unusedOffset;
+  _ty = line << 3;
+  if (matrixRotation[0] = 3) {
+    focusedLinePtr = byteForPixel(_width-1, focusedLine<<3, unusedOffset);
+  } else {  // matrixRotation[0] = 1
+    focusedLinePtr = byteForPixel(0, focusedLine<<3+7, unusedOffset);
+  }
+}
+
+int  Max72xxPanel::swapFocus(int line) {
+  int previouslyFocusedLine = focusedLine;
+  focusOnLine(line);
+  return previouslyFocusedLine;
 }
 
 void Max72xxPanel::reset() {
@@ -146,28 +139,37 @@ void Max72xxPanel::setIntensity(byte intensity) {
 }
 
 void Max72xxPanel::fillScreen(uint16_t color) {
-  memset(bitmap, color ? 0xff : 0, bitmapSize);
+  if (focusedLine == NoFocus) {
+    memset(bitmap, color ? 0xff : 0, bitmapSize);
+  } else {
+    memset(focusedLinePtr, color ? 0xff : 0, lineSizeInBytes);
+  }
 }
 
 void Max72xxPanel::drawPixel(int16_t xx, int16_t yy, uint16_t color) {
-  xx += _tx; yy += _ty;
-  if (clipRegion.xMin >= 0 &&
-      (xx < clipRegion.xMin || xx > clipRegion.xMax ||
-       yy < clipRegion.yMin || yy > clipRegion.yMax)) return;
+  if (focusedLine != NoFocus && ((yy < 0 || yy > 7))) return;
+  yy += _ty;  // Translate to device space
+
   byte offestInByte;
   byte *ptr = byteForPixel(xx, yy, offestInByte);
   if (!ptr) return;
   byte val = 1 << (offestInByte & 0b111);
 
-	if ( color ) {
-		*ptr |= val;
-	}
-	else {
-		*ptr &= ~val;
-	}
+	if ( color ) { *ptr |= val; }
+	else { *ptr &= ~val; }
 }
 
 void Max72xxPanel::write() {
+  // if (debug) {
+  //   byte offestInByte;
+  //   for (int x = 0; x < _width; x++) {
+  //     for (int y = 0; y < _height; y++) {
+  //       uint32_t addr = (uint32_t)byteForPixel(x, y, offestInByte);
+  //       offestInByte &= 0b111;
+  //       Serial.printf("[%2d, %2d]: %x | %d\n", x, y, addr, offestInByte);
+  //     }
+  //   }
+  // }
 	// Send the bitmap buffer to the displays.
 
 	for ( byte row = OP_DIGIT7; row >= OP_DIGIT0; row-- ) {
@@ -199,6 +201,8 @@ void Max72xxPanel::spiTransfer(byte opcode, byte data) {
 }
 
 uint16_t Max72xxPanel::readPixel(int16_t xx, int16_t yy) {
+  if (focusedLine != NoFocus && ((yy < 0 || yy > 7))) return 0;
+  yy += _ty;  // Translate to device space
   byte offestInByte;
   byte *ptr = byteForPixel(xx, yy, offestInByte);
   if (!ptr) return 0;

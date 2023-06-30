@@ -103,28 +103,35 @@ public:
   // ===== Functions added to the standard Max72xxPanel library
   //
 
-  /*
-   * Read the pixel value at the specified location from the buffer
-   */
-  uint16_t readPixel(int16_t xx, int16_t yy);
 
-  /*
-   * Reset the display to it's initial state
-   */
+  // Reset the display to it's initial state
   void reset();
   
   /*
-   * Clip all drawing to the specified region
+   *  By passing true the client is saying that the displays are in 
+   *  sequential order and that they're all the same rotation: 1 or 3. 
+   *  Furthermore, the client guarantees that it will not apply a
+   *  Adafruit_GFX-level rotation, nor will it change any of this
+   *  in the future. These situations are common and allow the
+   *  implementation to take some shortcuts.
    */
-  void clip(uint16_t xMin, uint16_t yMin, uint16_t xMax, uint16_t yMax);
+  void setOptimizeHint(bool hint) { optimizeHint = hint; }
 
   /*
-   * Don't do any clipping
+   * Act as if the given line (hortizontal row of 8x8 modules) was the entire
+   * display. Drawing outside the region will be clipped. The y coordinate of
+   * drawing operations will be translated accordingly.
    */
-  void resetClip();
+  void focusOnLine(int line);
+  int  currentFocusedLine() { return focusedLine; }
+  int  swapFocus(int line);
+  // void setDebug(bool turnDebugOn) { debug = turnDebugOn; }
 
-  void translate(int16_t tx, uint16_t ty) { _tx = tx; _ty = ty; }
-  void resetTranslation() { _tx = 0; _ty = 0; }
+  int16_t focusedHeight() { return focusedLine == NoFocus ? _height : 8; }
+  uint16_t readPixel(int16_t xx, int16_t yy);
+
+  static constexpr int NoFocus = -1;
+
 
 private:
   byte SPI_CS; /* SPI chip selection */
@@ -140,11 +147,6 @@ private:
    */
   inline byte* byteForPixel(int16_t xx, int16_t yy, byte& y);
 
-  struct {
-    int16_t xMin, yMin;
-    int16_t xMax, yMax;
-  } clipRegion;
-
   /* We keep track of the led-status for 8 devices in this array */
   byte *bitmap;
   byte bitmapSize;
@@ -153,8 +155,12 @@ private:
   byte *matrixPosition;
   byte *matrixRotation;
 
-  int16_t _tx = 0;
-  int16_t _ty = 0;
+  bool optimizeHint = false;
+  int focusedLine = NoFocus;
+  int _ty = 0;
+  byte* focusedLinePtr = nullptr;
+  uint16_t lineSizeInBytes = 0;
+  // bool debug;
 };
 
 #endif	// Max72xxPanel_h
