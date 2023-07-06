@@ -160,7 +160,7 @@ private:
   int _ty = 0;
   byte* focusedLinePtr = nullptr;
   uint16_t lineSizeInBytes = 0;
-  // bool debug;
+  bool debug;
 };
 
 #endif	// Max72xxPanel_h

@@ -75,10 +75,11 @@ void Max72xxPanel::focusOnLine(int line) {
 
   byte unusedOffset;
   _ty = line << 3;
-  if (matrixRotation[0] = 3) {
-    focusedLinePtr = byteForPixel(_width-1, focusedLine<<3, unusedOffset);
-  } else {  // matrixRotation[0] = 1
-    focusedLinePtr = byteForPixel(0, focusedLine<<3+7, unusedOffset);
+  if (matrixPosition[_ty] > matrixPosition[_ty+1]) {
+    focusedLinePtr = byteForPixel(_width-1, _ty, unusedOffset);
+  } else {
+    if (matrixRotation[_ty] == 1) { focusedLinePtr = byteForPixel(0, _ty, unusedOffset); }
+    else { focusedLinePtr = byteForPixel(0, _ty+7, unusedOffset); }
   }
 }
 
@@ -170,8 +171,8 @@ void Max72xxPanel::write() {
   //     }
   //   }
   // }
-	// Send the bitmap buffer to the displays.
 
+	// Send the bitmap buffer to the displays.
 	for ( byte row = OP_DIGIT7; row >= OP_DIGIT0; row-- ) {
 		spiTransfer(row);
 	}
